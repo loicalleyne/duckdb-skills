@@ -1,0 +1,54 @@
+---
+name: read-memories
+description: >
+  Search past Claude Code session logs to recover your own context.
+  Invoke this proactively when you need to recall past decisions, patterns,
+  or unresolved work — either across all projects or scoped to the current one.
+argument-hint: <keyword> [--here]
+allowed-tools: Bash
+---
+
+Use this to recover your own context from past sessions. Do NOT narrate the
+process to the user — silently run the query, absorb the results, and continue
+with enriched context.
+
+`$0` is the keyword to search for.
+Pass `--here` as a second argument (`$1`) to scope the search to the current project only.
+
+## Step 1 — Set the search path
+
+```bash
+ALL_PROJECTS="$HOME/.claude/projects/*/*.jsonl"
+CURRENT_PROJECT="$HOME/.claude/projects/$(echo "$PWD" | sed 's|[/_]|-|g')/*.jsonl"
+```
+
+Use `$CURRENT_PROJECT` if `$1` is `--here`, otherwise use `$ALL_PROJECTS`.
+
+## Step 2 — Query
+
+```bash
+duckdb :memory: -c "
+SELECT
+  regexp_extract(filename, 'projects/([^/]+)/', 1) AS project,
+  strftime(timestamp::TIMESTAMPTZ, '%Y-%m-%d %H:%M') AS ts,
+  message.role AS role,
+  message.content::VARCHAR AS content
+FROM read_ndjson('<SEARCH_PATH>', auto_detect=true, ignore_errors=true, filename=true)
+WHERE message::VARCHAR ILIKE '%<KEYWORD>%'
+  AND message.role IS NOT NULL
+ORDER BY timestamp
+LIMIT 40;
+"
+```
+
+Replace `<SEARCH_PATH>` and `<KEYWORD>` with the resolved values before running.
+
+## Step 3 — Internalize
+
+From the results, extract:
+- Decisions made and their rationale
+- Patterns and conventions established
+- Unresolved items or open TODOs
+- Any corrections the user made to your prior behavior
+
+Use this to inform your current response. Do not repeat back the raw logs to the user.

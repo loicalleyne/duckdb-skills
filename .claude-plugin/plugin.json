@@ -1,0 +1,10 @@
+{
+  "name": "duckdb-claude-skills",
+  "description": "DuckDB-powered skills for Claude Code: read any data file and search past session logs.",
+  "version": "0.1.0",
+  "author": {
+    "name": "carlopi",
+    "url": "https://github.com/carlopi"
+  },
+  "repository": "https://github.com/carlopi/duckdb-claude-skills"
+}
