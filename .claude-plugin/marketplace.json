@@ -1,0 +1,19 @@
+{
+  "name": "duckdb-claude-skills",
+  "owner": {
+    "name": "carlopi",
+    "url": "https://github.com/carlopi"
+  },
+  "plugins": [
+    {
+      "name": "duckdb-claude-skills",
+      "source": "./",
+      "description": "DuckDB-powered skills for Claude Code: read any data file, search past session logs, and install/update DuckDB extensions.",
+      "version": "0.1.0",
+      "homepage": "https://duckdb.org",
+      "repository": "https://github.com/carlopi/duckdb-claude-skills",
+      "license": "MIT",
+      "keywords": ["duckdb", "parquet", "read-file", "read-memories", "data-exploration", "session-logs"]
+    }
+  ]
+}
