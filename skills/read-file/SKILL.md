@@ -15,21 +15,19 @@ Question: `${1:-describe the data}`
 
 Follow these steps in order, stopping and reporting clearly if any step fails.
 
-## Step 1 — Locate DuckDB
+## Step 1 — Locate DuckDB (requires ≥ v1.5.0)
 
 ```bash
 DUCKDB=$(command -v duckdb)
 ```
 
-If not found, tell the user:
+- **Not found** → invoke `/duckdb-claude-skills:install-duckdb` (no arguments) to install DuckDB, then re-check.
+- **Found but version < 1.5.0** → tell the user the installed version is too old, then invoke `/duckdb-claude-skills:install-duckdb --update` to upgrade.
+- **Found and version ≥ 1.5.0** → continue.
 
-> **DuckDB is not installed.** Install it with one of:
-> - macOS:   `brew install duckdb`
-> - Linux:   `curl -fsSL https://install.duckdb.org | sh`
-> - Windows: `winget install DuckDB.cli`
-> - pip:     `pip install duckdb` (CLI via `python -m duckdb`)
->
-> Then re-run `/duckdb-claude-skills:read-file`.
+```bash
+CURRENT=$(duckdb --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+```
 
 ## Step 2 — Resolve the filename to a full path
 
