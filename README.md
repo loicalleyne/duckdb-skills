@@ -31,22 +31,24 @@ Install or update DuckDB extensions. Supports `name@repo` syntax for community e
 Inside Claude Code:
 
 ```
-/plugin marketplace add carlopi/duckdb-claude-skills
-/plugin install duckdb-claude-skills@duckdb-claude-skills
+/plugin marketplace add duckdb/duckdb-skills
+```
+```
+/plugin install duckdb-skills@duckdb-skills
 ```
 
-Skills will be available as `/duckdb-claude-skills:<skill-name>` in all future sessions.
+Skills will be available as `/duckdb-skills:<skill-name>` in all future sessions.
 
 **One-off / testing:**
 
 ```bash
-claude --plugin-dir /path/to/duckdb-claude-skills
+claude --plugin-dir /path/to/duckdb-skills
 ```
 
 ## Reporting issues & suggestions
 
 Found a bug or have an idea for improvement? Open an issue at:
 
-**https://github.com/carlopi/duckdb-claude-skills/issues**
+**https://github.com/duckdb/duckdb-skills/issues**
 
 For DuckDB-specific bugs (extension loading, SQL errors), please include the DuckDB version (`duckdb --version`) and the full error message.
