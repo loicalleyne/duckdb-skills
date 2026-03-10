@@ -2,6 +2,19 @@
 
 A [Claude Code](https://claude.ai/code) plugin that adds DuckDB-powered skills for data exploration and session memory.
 
+## Installation
+
+Inside Claude Code:
+
+```
+/plugin marketplace add duckdb/duckdb-skills
+```
+```
+/plugin install duckdb-skills@duckdb-skills
+```
+
+Skills will be available as `/duckdb-skills:<skill-name>` in all future sessions.
+
 ## Skills
 
 ### `read-file`
@@ -25,19 +38,6 @@ Install or update DuckDB extensions. Supports `name@repo` syntax for community e
 /duckdb-claude-skills:install-duckdb spatial magic@community httpfs
 /duckdb-claude-skills:install-duckdb --update
 ```
-
-## Installation
-
-Inside Claude Code:
-
-```
-/plugin marketplace add duckdb/duckdb-skills
-```
-```
-/plugin install duckdb-skills@duckdb-skills
-```
-
-Skills will be available as `/duckdb-skills:<skill-name>` in all future sessions.
 
 **One-off / testing:**
 
