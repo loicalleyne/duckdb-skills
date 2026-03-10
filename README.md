@@ -21,22 +21,22 @@ Skills will be available as `/duckdb-skills:<skill-name>` in all future sessions
 Read and explore any data file — CSV, JSON, Parquet, Avro, Excel, spatial formats, and more — by filename only. Automatically resolves the path, detects the format via the [magic](https://github.com/carlopi/duckdb_magic) extension, and installs any required DuckDB extensions on the fly.
 
 ```
-/duckdb-claude-skills:read-file variants.parquet what columns does it have?
+/duckdb-skills:read-file variants.parquet what columns does it have?
 ```
 
 ### `read-memories`
 Search past Claude Code session logs to recover context from previous conversations — decisions made, patterns established, open TODOs. Invoke it proactively when you need to recall past work.
 
 ```
-/duckdb-claude-skills:read-memories duckdb --here
+/duckdb-skills:read-memories duckdb --here
 ```
 
 ### `install-duckdb`
 Install or update DuckDB extensions. Supports `name@repo` syntax for community extensions and a `--update` flag that also checks whether your DuckDB CLI is on the latest stable version.
 
 ```
-/duckdb-claude-skills:install-duckdb spatial magic@community httpfs
-/duckdb-claude-skills:install-duckdb --update
+/duckdb-skills:install-duckdb spatial magic@community httpfs
+/duckdb-skills:install-duckdb --update
 ```
 
 **One-off / testing:**
