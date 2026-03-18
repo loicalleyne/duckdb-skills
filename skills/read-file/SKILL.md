@@ -39,19 +39,32 @@ find "$PWD" -name "$0" -not -path '*/.git/*' 2>/dev/null
 
 Use the URI/URL as-is for `RESOLVED_PATH`. Skip the find step.
 
-## Step 2 — Set up remote access (if needed)
+## Step 2 — Resolve the state directory and set up remote access (if needed)
 
-If the file is remote, ensure the required extensions and secrets are configured. Check if `.duckdb-skills/state.sql` already has the needed setup — if so, use it directly with `duckdb -init ".duckdb-skills/state.sql"` and skip to Step 3.
+Look for an existing state file:
 
-Otherwise, set up access and **persist it to state.sql** so subsequent queries don't need to repeat this:
+```bash
+STATE_DIR=""
+test -f .duckdb-skills/state.sql && STATE_DIR=".duckdb-skills"
+PROJECT_NAME="$(basename "$PWD")"
+test -f "$HOME/.duckdb-skills/$PROJECT_NAME/state.sql" && STATE_DIR="$HOME/.duckdb-skills/$PROJECT_NAME"
+```
+
+If the file is **local** and `STATE_DIR` is set, skip to Step 3. If the file is **local** and no state exists, skip to Step 3 (no state needed for local reads).
+
+If the file is **remote**, state is needed for secrets/extensions. If `STATE_DIR` is empty, ask the user where to store state (same options as `/duckdb-skills:attach-db`):
+
+> 1. **In the project directory** (`.duckdb-skills/`) — optionally gitignored
+> 2. **In your home directory** (`~/.duckdb-skills/<project>/`)
+
+Create the chosen directory, then set up access and **persist it to state.sql**:
 
 ### S3
 
 ```bash
 duckdb :memory: -c "INSTALL httpfs;"
-mkdir -p ".duckdb-skills"
 # credential_chain is safe to store — no actual secrets, delegates to local AWS credentials
-cat >> ".duckdb-skills/state.sql" <<'SQL'
+grep -q "credential_chain" "$STATE_DIR/state.sql" 2>/dev/null || cat >> "$STATE_DIR/state.sql" <<'SQL'
 LOAD httpfs;
 CREATE SECRET IF NOT EXISTS __default_s3 (TYPE S3, PROVIDER credential_chain);
 SQL
@@ -61,8 +74,7 @@ SQL
 
 ```bash
 duckdb :memory: -c "INSTALL httpfs;"
-mkdir -p ".duckdb-skills"
-cat >> ".duckdb-skills/state.sql" <<'SQL'
+grep -q "__default_gcs" "$STATE_DIR/state.sql" 2>/dev/null || cat >> "$STATE_DIR/state.sql" <<'SQL'
 LOAD httpfs;
 CREATE SECRET IF NOT EXISTS __default_gcs (TYPE GCS, PROVIDER credential_chain);
 SQL
@@ -72,8 +84,7 @@ SQL
 
 ```bash
 duckdb :memory: -c "INSTALL httpfs; INSTALL azure;"
-mkdir -p ".duckdb-skills"
-cat >> ".duckdb-skills/state.sql" <<'SQL'
+grep -q "__default_azure" "$STATE_DIR/state.sql" 2>/dev/null || cat >> "$STATE_DIR/state.sql" <<'SQL'
 LOAD httpfs;
 LOAD azure;
 CREATE SECRET IF NOT EXISTS __default_azure (TYPE AZURE, PROVIDER credential_chain);
@@ -84,27 +95,25 @@ SQL
 
 ```bash
 duckdb :memory: -c "INSTALL httpfs;"
-mkdir -p ".duckdb-skills"
-cat >> ".duckdb-skills/state.sql" <<'SQL'
-LOAD httpfs;
-SQL
+grep -q "LOAD httpfs;" "$STATE_DIR/state.sql" 2>/dev/null || echo "LOAD httpfs;" >> "$STATE_DIR/state.sql"
 ```
-
-**Important**: Before appending, check if `state.sql` already contains the relevant LOAD/CREATE SECRET lines to avoid duplicates.
 
 ## Step 3 — Ensure the `read_any` macro is in state.sql
 
-The `read_any` macro dispatches to the right reader based on file extension, using only core DuckDB functions. Check if `state.sql` already defines it:
+The `read_any` macro dispatches to the right reader based on file extension, using only core DuckDB functions.
+
+If `STATE_DIR` is empty (local file, no state created yet), create one now. Ask the user the same location question as above.
+
+Check if `state.sql` already defines the macro:
 
 ```bash
-grep -q "read_any" ".duckdb-skills/state.sql" 2>/dev/null
+grep -q "read_any" "$STATE_DIR/state.sql" 2>/dev/null
 ```
 
 If not, append it:
 
 ```bash
-mkdir -p ".duckdb-skills"
-cat >> ".duckdb-skills/state.sql" <<'SQL'
+cat >> "$STATE_DIR/state.sql" <<'SQL'
 -- read_any: auto-detect file format by extension and dispatch to the right reader
 CREATE OR REPLACE MACRO read_any(file_name) AS TABLE
   WITH json_case AS (FROM read_json_auto(file_name))
@@ -151,9 +160,9 @@ Some readers require core extensions that may not be loaded yet. If the read fai
 ```bash
 duckdb :memory: -c "INSTALL <extension>;"
 # Prepend the LOAD to state.sql so it's available before the macro runs
-grep -q "LOAD <extension>;" ".duckdb-skills/state.sql" 2>/dev/null || sed -i '' '1i\
+grep -q "LOAD <extension>;" "$STATE_DIR/state.sql" 2>/dev/null || sed -i '' '1i\
 LOAD <extension>;
-' ".duckdb-skills/state.sql"
+' "$STATE_DIR/state.sql"
 ```
 
 ## Step 4 — Read the file
@@ -161,7 +170,7 @@ LOAD <extension>;
 **Remote files** (use state.sql for secrets/extensions + macro):
 
 ```bash
-duckdb -init ".duckdb-skills/state.sql" -csv -c "
+duckdb -init "$STATE_DIR/state.sql" -csv -c "
 SELECT column_name FROM (DESCRIBE FROM read_any('RESOLVED_PATH'));
 SELECT count(*) AS row_count FROM read_any('RESOLVED_PATH');
 FROM read_any('RESOLVED_PATH') LIMIT 10;
@@ -171,7 +180,7 @@ FROM read_any('RESOLVED_PATH') LIMIT 10;
 **Local files** (sandboxed — load state.sql first for the macro, then lock down):
 
 ```bash
-duckdb -init ".duckdb-skills/state.sql" -csv -c "
+duckdb -init "$STATE_DIR/state.sql" -csv -c "
 SET allowed_paths=['RESOLVED_PATH'];
 SET enable_external_access=false;
 SET allow_persistent_secrets=false;
@@ -216,5 +225,5 @@ Keep these suggestions brief and only show them once — don't repeat on follow-
 
 ## Cross-skill integration
 
-- **Session state**: If `.duckdb-skills/state.sql` exists, the user has an active database session (set up via `/duckdb-skills:attach-db`). If the user asks follow-up queries about a file you just read, suggest using `/duckdb-skills:query` which will pick up any attached databases automatically.
+- **Session state**: If a `state.sql` exists (in `.duckdb-skills/` or `$HOME/.duckdb-skills/<project>/`), the user has an active database session. If the user asks follow-up queries about a file you just read, suggest using `/duckdb-skills:query` which will pick up any attached databases automatically.
 - **Error troubleshooting**: If DuckDB returns a persistent or unclear error (e.g. unsupported format, extension issues), use `/duckdb-skills:duckdb-docs <error keywords>` to search the documentation for guidance.

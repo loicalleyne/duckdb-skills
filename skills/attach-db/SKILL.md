@@ -12,13 +12,9 @@ You are helping the user attach a DuckDB database file for interactive querying.
 
 Database path given: `$0`
 
-The session is stored as a project-local SQL file at `.duckdb-skills/state.sql` (relative to the project root). Any skill can use it with:
-
-```bash
-duckdb -init ".duckdb-skills/state.sql" -c "<QUERY>"
-```
-
 Follow these steps in order, stopping and reporting clearly if any step fails.
+
+**State file convention**: see the "Resolve state directory" section below. All skills share a single `state.sql` file per project. Once resolved, any skill can use it with `duckdb -init "$STATE_DIR/state.sql" -c "<QUERY>"`.
 
 ## Step 1 — Resolve the database path
 
@@ -79,24 +75,59 @@ SELECT count() AS row_count FROM <table_name>;
 
 Collect the column definitions and row counts for the summary.
 
-## Step 5 — Append to the state file
+## Step 5 — Resolve the state directory
 
-`state.sql` is a shared, accumulative init file used by all duckdb-skills. It may already contain macros, LOAD statements, secrets, or other ATTACH statements written by other skills. **Never overwrite it** — always check for duplicates and append.
+Check if a state file already exists in either location:
 
 ```bash
-mkdir -p ".duckdb-skills"
+# Option 1: in the project directory
+test -f .duckdb-skills/state.sql && STATE_DIR=".duckdb-skills"
+
+# Option 2: in the home directory, scoped by project name
+PROJECT_NAME="$(basename "$PWD")"
+test -f "$HOME/.duckdb-skills/$PROJECT_NAME/state.sql" && STATE_DIR="$HOME/.duckdb-skills/$PROJECT_NAME"
 ```
+
+If **neither exists**, ask the user:
+
+> Where would you like to store the DuckDB session state for this project?
+>
+> 1. **In the project directory** (`.duckdb-skills/state.sql`) — colocated with the project, easy to find. You can choose to gitignore it.
+> 2. **In your home directory** (`~/.duckdb-skills/<project>/state.sql`) — keeps the project directory clean.
+
+Based on their choice:
+
+**Option 1:**
+```bash
+STATE_DIR=".duckdb-skills"
+mkdir -p "$STATE_DIR"
+```
+Then ask: *"Would you like to gitignore `.duckdb-skills/`?"* If yes:
+```bash
+echo '.duckdb-skills/' >> .gitignore
+```
+
+**Option 2:**
+```bash
+PROJECT_NAME="$(basename "$PWD")"
+STATE_DIR="$HOME/.duckdb-skills/$PROJECT_NAME"
+mkdir -p "$STATE_DIR"
+```
+
+## Step 6 — Append to the state file
+
+`state.sql` is a shared, accumulative init file used by all duckdb-skills. It may already contain macros, LOAD statements, secrets, or other ATTACH statements written by other skills. **Never overwrite it** — always check for duplicates and append.
 
 Derive the database alias from the filename without extension (e.g. `my_data.duckdb` → `my_data`). Check if this ATTACH already exists:
 
 ```bash
-grep -q "ATTACH.*RESOLVED_PATH" ".duckdb-skills/state.sql" 2>/dev/null
+grep -q "ATTACH.*RESOLVED_PATH" "$STATE_DIR/state.sql" 2>/dev/null
 ```
 
 If not already present, append:
 
 ```bash
-cat >> ".duckdb-skills/state.sql" <<'STATESQL'
+cat >> "$STATE_DIR/state.sql" <<'STATESQL'
 ATTACH IF NOT EXISTS 'RESOLVED_PATH' AS my_data;
 USE my_data;
 STATESQL
@@ -104,20 +135,21 @@ STATESQL
 
 Replace `RESOLVED_PATH` and `my_data` with the actual values. If the alias would conflict with an existing one in the file, ask the user for a name.
 
-## Step 6 — Verify the state file works
+## Step 7 — Verify the state file works
 
 ```bash
-duckdb -init ".duckdb-skills/state.sql" -c "SHOW TABLES;"
+duckdb -init "$STATE_DIR/state.sql" -c "SHOW TABLES;"
 ```
 
 If this fails, fix the state file and retry.
 
-## Step 7 — Report
+## Step 8 — Report
 
 Summarize for the user:
 
 - **Database path**: the resolved absolute path
 - **Alias**: the database alias used in the state file
+- **State file**: the resolved `STATE_DIR/state.sql` path
 - **Tables**: name, column count, row count for each table (or note the DB is empty)
 - Confirm the database is now active for `/duckdb-skills:query`
 
