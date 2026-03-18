@@ -37,8 +37,8 @@ duckdb :memory: -csv -c "LOAD magic; SET allowed_paths=['RESOLVED_PATH']; SET en
 **If this succeeds** → skip to Step 4 (Answer).
 
 **If this fails** → diagnose the cause:
-- **`duckdb: command not found`** → invoke `/duckdb-claude-skills:install-duckdb magic@community` to install DuckDB and magic, then retry this step.
-- **Version too old** (e.g. `read_any` or `magic` not recognised) → invoke `/duckdb-claude-skills:install-duckdb --update magic@community` to upgrade, then retry this step.
+- **`duckdb: command not found`** → invoke `/duckdb-skills:install-duckdb magic@community` to install DuckDB and magic, then retry this step.
+- **Version too old** (e.g. `read_any` or `magic` not recognised) → invoke `/duckdb-skills:install-duckdb --update magic@community` to upgrade, then retry this step.
 - **Missing extension** → continue to Step 3.
 
 Notes:
@@ -69,3 +69,20 @@ The three SELECT statements in 3c produce three result sets printed sequentially
 Using the schema, row count, and sample rows gathered above, answer:
 
 `${1:-describe the data: summarize column types, row count, and any notable patterns.}`
+
+## Step 5 — Suggest next steps
+
+After answering, if the data looks like something the user might want to explore further (multiple columns, non-trivial row count), mention:
+
+> *If you want to keep querying this data — filter, aggregate, join with other files — you can use `/duckdb-skills:query`. It supports SQL and natural language questions.*
+
+If the file is large and the user might benefit from persisting it, also suggest:
+
+> *To attach this as a database for repeated queries, run `/duckdb-skills:attach-db <path>`.*
+
+Keep these suggestions brief and only show them once — don't repeat on follow-ups.
+
+## Cross-skill integration
+
+- **Session state**: If `$HOME/.duckdb-skills/state.sql` exists, the user has an active database session (set up via `/duckdb-skills:attach-db`). If the user asks follow-up queries about a file you just read, suggest using `/duckdb-skills:query` which will pick up any attached databases automatically.
+- **Error troubleshooting**: If DuckDB returns a persistent or unclear error (e.g. unsupported format, extension issues), use `/duckdb-skills:duckdb-docs <error keywords>` to search the documentation for guidance.
