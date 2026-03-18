@@ -37,8 +37,8 @@ duckdb :memory: -csv -c "LOAD magic; SET allowed_paths=['RESOLVED_PATH']; SET en
 **If this succeeds** → skip to Step 4 (Answer).
 
 **If this fails** → diagnose the cause:
-- **`duckdb: command not found`** → invoke `/duckdb-claude-skills:install-duckdb magic@community` to install DuckDB and magic, then retry this step.
-- **Version too old** (e.g. `read_any` or `magic` not recognised) → invoke `/duckdb-claude-skills:install-duckdb --update magic@community` to upgrade, then retry this step.
+- **`duckdb: command not found`** → invoke `/duckdb-skills:install-duckdb magic@community` to install DuckDB and magic, then retry this step.
+- **Version too old** (e.g. `read_any` or `magic` not recognised) → invoke `/duckdb-skills:install-duckdb --update magic@community` to upgrade, then retry this step.
 - **Missing extension** → continue to Step 3.
 
 Notes:

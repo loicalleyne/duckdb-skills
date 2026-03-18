@@ -1,5 +1,5 @@
 {
-  "name": "duckdb-claude-skills",
+  "name": "duckdb-skills",
   "description": "DuckDB-powered skills for Claude Code: read any data file, attach and query DuckDB databases, search DuckDB/DuckLake docs, search past session logs, and install/update DuckDB extensions.",
   "version": "0.1.0",
   "author": {
