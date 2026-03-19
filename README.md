@@ -114,6 +114,10 @@ Skills reference each other where it makes sense:
 - `query`, `read-file`, and `read-memories` all use `duckdb-docs` to troubleshoot DuckDB errors automatically
 - All skills share the same `state.sql` — secrets and macros set up by `read-file` are reused by `query`, and databases attached by `attach-db` are available everywhere
 
+## Platform support
+
+These skills have been tested on **macOS** and **Linux**. Windows is not yet fully supported — some shell commands and path handling may not work as expected. We plan to improve Windows compatibility in a future release.
+
 ## Reporting issues & suggestions
 
 Found a bug or have an idea for improvement? Open an issue at:
