@@ -105,11 +105,11 @@ CACHE_AGE_DAYS=$(( ( $(date +%s) - MTIME ) / 86400 ))
 - **2 days old or less** → use it directly (skip to Step 6).
 - **Older than 2 days** → silently refresh it by deleting the file and re-running the COPY FROM DATABASE below. No need to ask the user.
 
-**If no local cache exists** → this is the first docs query. Ask the user:
+**If no local cache exists** → this is the first docs query. **You MUST ask the user the following question before proceeding — do not skip this step:**
 
 > To avoid repeated HTTP calls to the remote docs index, I can create a local copy in your project's state directory. This makes future searches faster and works offline. Would you like me to cache it locally?
 
-If the user agrees (and `STATE_DIR` is empty, ask for their preferred location first):
+**Wait for the user's response.** If the user agrees (and `STATE_DIR` is empty, ask for their preferred location first):
 
 ```bash
 duckdb :memory: -c "
