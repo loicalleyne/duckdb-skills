@@ -172,7 +172,7 @@ If the user's question could benefit from both DuckDB docs and blog results, run
 - **Local cache stale**: if results seem outdated, suggest refreshing the cache by deleting the local file and re-running the query (it will re-download).
 - **No results** (all scores NULL or empty result set): try broadening the query — drop the least specific term, or try a single-word version of the query — then retry Step 6. If still no results, tell the user no matching documentation was found and suggest visiting https://duckdb.org/docs or https://ducklake.select/docs directly.
 
-## Step 6 — Present results
+## Step 8 — Present results
 
 For each result chunk returned (ordered by score descending), format as:
 
