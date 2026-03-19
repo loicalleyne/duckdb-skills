@@ -30,7 +30,20 @@ duckdb :memory: -c "INSTALL httpfs; INSTALL fts;"
 
 If this fails, report the error and stop.
 
-## Step 3 — Choose the data source and extract search terms
+## Step 3 — Resolve state directory
+
+Look for an existing state file:
+
+```bash
+STATE_DIR=""
+test -f .duckdb-skills/state.sql && STATE_DIR=".duckdb-skills"
+PROJECT_NAME="$(basename "$PWD")"
+test -f "$HOME/.duckdb-skills/$PROJECT_NAME/state.sql" && STATE_DIR="$HOME/.duckdb-skills/$PROJECT_NAME"
+```
+
+If `STATE_DIR` is empty, this skill can still work without state (querying remotely). But if a local cache is created in Step 5, state will be needed — ask the user the same location question as `/duckdb-skills:attach-db` at that point.
+
+## Step 4 — Choose the data source and extract search terms
 
 The query is: `$@`
 
@@ -38,10 +51,10 @@ The query is: `$@`
 
 There are two search indexes available:
 
-| Index | URL | Versions | Use when |
-|-------|-----|----------|----------|
-| **DuckDB docs + blog** | `https://duckdb.org/data/docs-search.duckdb` | `stable`, `current`, `blog` | Default — any DuckDB question |
-| **DuckLake docs** | `https://ducklake.select/data/docs-search.duckdb` | `stable`, `preview` | Query mentions DuckLake, catalogs, or DuckLake-specific features |
+| Index | Remote URL | Local cache filename | Versions | Use when |
+|-------|-----------|---------------------|----------|----------|
+| **DuckDB docs + blog** | `https://duckdb.org/data/docs-search.duckdb` | `duckdb-docs.duckdb` | `stable`, `current`, `blog` | Default — any DuckDB question |
+| **DuckLake docs** | `https://ducklake.select/data/docs-search.duckdb` | `ducklake-docs.duckdb` | `stable`, `preview` | Query mentions DuckLake, catalogs, or DuckLake-specific features |
 
 Both indexes share the same schema:
 
@@ -70,7 +83,66 @@ If the input is already a **function name or technical term** (e.g. `arg_max`, `
 
 Use the extracted terms as `SEARCH_QUERY` in the next step.
 
-## Step 4 — Search the docs
+## Step 5 — Check for local cache or offer to create one
+
+Check if a local copy of the docs index already exists:
+
+```bash
+test -n "$STATE_DIR" && test -f "$STATE_DIR/duckdb-docs.duckdb"
+```
+
+(Or `ducklake-docs.duckdb` for DuckLake queries.)
+
+**If a local cache exists** → use it directly (skip to Step 6 with the local path).
+
+**If no local cache exists** → this is the first docs query. Ask the user:
+
+> To avoid repeated HTTP calls to the remote docs index, I can create a local copy in your project's state directory. This makes future searches faster and works offline. Would you like me to cache it locally?
+
+If the user agrees (and `STATE_DIR` is empty, ask for their preferred location first):
+
+```bash
+duckdb :memory: -c "
+LOAD httpfs;
+LOAD fts;
+ATTACH 'INDEX_URL' AS remote_docs (READ_ONLY);
+ATTACH '$STATE_DIR/duckdb-docs.duckdb' AS local_docs;
+COPY FROM DATABASE remote_docs TO local_docs;
+"
+```
+
+Then add the ATTACH to `state.sql` so it's available to all skills:
+
+```bash
+grep -q "duckdb-docs.duckdb" "$STATE_DIR/state.sql" 2>/dev/null || cat >> "$STATE_DIR/state.sql" <<'SQL'
+LOAD fts;
+ATTACH IF NOT EXISTS 'STATE_DIR/duckdb-docs.duckdb' AS docs (READ_ONLY);
+SQL
+```
+
+Replace `STATE_DIR` with the actual resolved path.
+
+**If the user declines** → query remotely (the original behavior).
+
+## Step 6 — Search the docs
+
+**With local cache** (use state.sql):
+
+```bash
+duckdb -init "$STATE_DIR/state.sql" -json -c "
+USE docs;
+SELECT
+    chunk_id, page_title, section, breadcrumb, url, version, text,
+    fts_main_docs_chunks.match_bm25(chunk_id, 'SEARCH_QUERY') AS score
+FROM docs_chunks
+WHERE score IS NOT NULL
+  AND version = 'VERSION'
+ORDER BY score DESC
+LIMIT 8;
+"
+```
+
+**Without local cache** (remote query):
 
 ```bash
 duckdb :memory: -json <<'SQL'
@@ -79,13 +151,7 @@ LOAD fts;
 ATTACH 'INDEX_URL' AS docs (READ_ONLY);
 USE docs;
 SELECT
-    chunk_id,
-    page_title,
-    section,
-    breadcrumb,
-    url,
-    version,
-    text,
+    chunk_id, page_title, section, breadcrumb, url, version, text,
     fts_main_docs_chunks.match_bm25(chunk_id, 'SEARCH_QUERY') AS score
 FROM docs_chunks
 WHERE score IS NOT NULL
@@ -95,15 +161,16 @@ LIMIT 8;
 SQL
 ```
 
-Replace `INDEX_URL`, `SEARCH_QUERY`, and `VERSION` per Step 3. Remove the `AND version = 'VERSION'` line if searching across all versions.
+Replace `INDEX_URL`, `SEARCH_QUERY`, and `VERSION` per Step 4. Remove the `AND version = 'VERSION'` line if searching across all versions.
 
 If the user's question could benefit from both DuckDB docs and blog results, run two queries (one with `version = 'stable'`, one with `version = 'blog'`) or omit the version filter entirely.
 
-## Step 5 — Handle errors
+## Step 7 — Handle errors
 
-- **Extension not installed** (`httpfs` or `fts` not found): run `duckdb :memory: -c "INSTALL httpfs; INSTALL fts;"` and retry Step 4.
+- **Extension not installed** (`httpfs` or `fts` not found): run `duckdb :memory: -c "INSTALL httpfs; INSTALL fts;"` and retry Step 6.
 - **ATTACH fails / network unreachable**: inform the user that the docs index is unavailable and suggest checking their internet connection. The DuckDB index is hosted at `https://duckdb.org/data/docs-search.duckdb` and the DuckLake index at `https://ducklake.select/data/docs-search.duckdb`.
-- **No results** (all scores NULL or empty result set): try broadening the query — drop the least specific term, or try a single-word version of the query — then retry Step 4. If still no results, tell the user no matching documentation was found and suggest visiting https://duckdb.org/docs or https://ducklake.select/docs directly.
+- **Local cache stale**: if results seem outdated, suggest refreshing the cache by deleting the local file and re-running the query (it will re-download).
+- **No results** (all scores NULL or empty result set): try broadening the query — drop the least specific term, or try a single-word version of the query — then retry Step 6. If still no results, tell the user no matching documentation was found and suggest visiting https://duckdb.org/docs or https://ducklake.select/docs directly.
 
 ## Step 6 — Present results
 

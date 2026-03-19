@@ -49,7 +49,7 @@ Read and explore any data file — CSV, JSON, Parquet, Avro, Excel, spatial, SQL
 ```
 
 ### `duckdb-docs`
-Search DuckDB and DuckLake documentation and blog posts using full-text search against the hosted search indexes. No local setup required.
+Search DuckDB and DuckLake documentation and blog posts using full-text search against the hosted search indexes. No local setup required — queries run over HTTPS by default, with an option to cache the index locally for faster offline searches.
 
 ```
 /duckdb-skills:duckdb-docs window functions
