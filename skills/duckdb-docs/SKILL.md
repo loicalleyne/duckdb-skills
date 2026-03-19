@@ -104,11 +104,7 @@ LOAD fts;
 ATTACH 'REMOTE_URL' AS remote (READ_ONLY);
 ATTACH '$HOME/.duckdb/docs/CACHE_FILENAME.tmp' AS tmp;
 COPY FROM DATABASE remote TO tmp;
-DETACH remote;
-DETACH tmp;
-COPY FROM read_blob('$HOME/.duckdb/docs/CACHE_FILENAME.tmp') TO '$HOME/.duckdb/docs/CACHE_FILENAME' (FORMAT BINARY);
-"
-rm -f "$HOME/.duckdb/docs/CACHE_FILENAME.tmp"
+" && mv "$HOME/.duckdb/docs/CACHE_FILENAME.tmp" "$HOME/.duckdb/docs/CACHE_FILENAME"
 ```
 
 Replace `REMOTE_URL` and `CACHE_FILENAME` per Step 3. If the fetch fails (network error), report the error and stop.
