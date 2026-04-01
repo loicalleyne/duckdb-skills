@@ -6,8 +6,10 @@
 #   export ACTIVE_CLIENT="vscode"  # or "claude"
 #   source ./scripts/get_session_path.sh
 #
-# Exports: ENV_TYPE, SEARCH_PATH, BASE (vscode only)
+# Exports: ENV_TYPE, SEARCH_PATH, PLANS_SEARCH_PATH, BASE (vscode only)
 
+# Save shell options — this script is sourced, so set flags bleed into the caller
+_GSP_OLDOPTS=$(set +o); _GSP_OLDSHOPT=$(shopt -po 2>/dev/null || true)
 set -euo pipefail
 
 : "${ACTIVE_CLIENT:?ERROR: ACTIVE_CLIENT must be set to 'claude' or 'vscode'}"
@@ -52,16 +54,21 @@ elif [ "$ACTIVE_CLIENT" = "vscode" ]; then
 
         if [ -n "$WORKSPACE_IDS" ]; then
             CURRENT_SESSIONS=""
+            CURRENT_PLANS=""
             for WID in $WORKSPACE_IDS; do
                 CURRENT_SESSIONS="$CURRENT_SESSIONS,$BASE/$WID/chatSessions/*.json"
+                CURRENT_PLANS="$CURRENT_PLANS,$BASE/$WID/GitHub.copilot-chat/memory-tool/memories/*/*.md"
             done
             export SEARCH_PATH="${CURRENT_SESSIONS#,}"
+            export PLANS_SEARCH_PATH="${CURRENT_PLANS#,}"
         else
             echo "WARN: Could not resolve workspace ID for '$PWD'. Falling back to all sessions."
             export SEARCH_PATH="$BASE/**/chatSessions/*.json"
+            export PLANS_SEARCH_PATH="$BASE/*/GitHub.copilot-chat/memory-tool/memories/*/*.md"
         fi
     else
         export SEARCH_PATH="$BASE/**/chatSessions/*.json"
+        export PLANS_SEARCH_PATH="$BASE/*/GitHub.copilot-chat/memory-tool/memories/*/*.md"
     fi
 else
     echo "ERROR: Unknown ACTIVE_CLIENT='$ACTIVE_CLIENT'. Must be 'claude' or 'vscode'."
@@ -69,3 +76,9 @@ else
 fi
 
 echo "Environment: $ENV_TYPE | Scope: $SCOPE | Path: $SEARCH_PATH"
+[ -n "${PLANS_SEARCH_PATH:-}" ] && echo "Plans path: $PLANS_SEARCH_PATH"
+
+# Restore caller's shell options
+eval "$_GSP_OLDOPTS" 2>/dev/null
+eval "$_GSP_OLDSHOPT" 2>/dev/null
+unset _GSP_OLDOPTS _GSP_OLDSHOPT

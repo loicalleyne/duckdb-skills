@@ -53,6 +53,15 @@ bash ./scripts/search_claude.sh  && echo "===DONE===" || echo "===FAILED==="
 bash ./scripts/search_copilot.sh && echo "===DONE===" || echo "===FAILED==="
 ```
 
+For VS Code, also search Copilot memory-tool plan files (PlanD plans):
+
+```bash
+bash ./scripts/search_copilot_plans.sh && echo "===DONE===" || echo "===FAILED==="
+# Optional: filter to specific plan sections (e.g., Decisions, Verification)
+export DRILL_SECTION="Decisions"
+bash ./scripts/search_copilot_plans.sh && echo "===DONE===" || echo "===FAILED==="
+```
+
 ## Step 3 — Materialize large results (optional)
 
 If results exceed 40 rows, re-run with materialization:
