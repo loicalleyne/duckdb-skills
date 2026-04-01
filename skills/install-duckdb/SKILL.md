@@ -5,7 +5,9 @@ description: >
   extension name (installs from core) or name@repo (e.g. magic@community).
   Pass --update to update extensions instead of installing.
 argument-hint: "[--update] [ext1 ext2@repo ext3 ...]"
-allowed-tools: Bash
+allowed-tools:
+  - Bash
+  - run_in_terminal
 ---
 
 Arguments: `$@`

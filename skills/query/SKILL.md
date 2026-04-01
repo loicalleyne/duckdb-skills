@@ -4,7 +4,9 @@ description: >
   Run SQL queries against the attached DuckDB database or ad-hoc against files.
   Accepts raw SQL or natural language questions. Uses DuckDB Friendly SQL idioms.
 argument-hint: <SQL or question> [--file path]
-allowed-tools: Bash
+allowed-tools:
+  - Bash
+  - run_in_terminal
 ---
 
 You are helping the user query data using DuckDB.

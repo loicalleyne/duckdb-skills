@@ -5,7 +5,9 @@ description: >
   Explores the schema (tables, columns, row counts) and writes a SQL state file
   so subsequent queries can restore this session automatically via duckdb -init.
 argument-hint: <path-to-database.duckdb>
-allowed-tools: Bash
+allowed-tools:
+  - Bash
+  - run_in_terminal
 ---
 
 You are helping the user attach a DuckDB database file for interactive querying.

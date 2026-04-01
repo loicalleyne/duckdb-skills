@@ -5,7 +5,9 @@ description: >
   doc chunks for a question or keyword using full-text search against a
   locally cached index.
 argument-hint: <question or keyword>
-allowed-tools: Bash
+allowed-tools:
+  - Bash
+  - run_in_terminal
 ---
 
 You are helping the user find relevant DuckDB or DuckLake documentation.
