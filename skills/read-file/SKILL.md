@@ -4,6 +4,9 @@ description: >
   Read any data file (CSV, JSON, Parquet, Avro, Excel, spatial, SQLite) or remote URL (S3, HTTPS).
   Use when user references a data file, asks "what's in this file", or wants to preview/profile a dataset.
   Not for source code.
+  DO NOT USE THIS SKILL when: the user wants to run analytical SQL queries,
+  aggregations, joins, or transformations on remote data — delegate to
+  query-cloud for URL-referenced analytical work.
 argument-hint: <filename or URL> [question about the data]
 allowed-tools:
   - Bash

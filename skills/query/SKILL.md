@@ -1,23 +1,43 @@
 ---
 name: query
 description: >
-  Run SQL queries against the attached DuckDB database or ad-hoc against files.
+  Run SQL queries against the attached DuckDB database or ad-hoc against local files.
   Accepts raw SQL or natural language questions. Uses DuckDB Friendly SQL idioms.
+  USE THIS SKILL when: the user wants to query local files or an already-attached
+  DuckDB database, run analytical SQL, convert file formats, or asks natural
+  language questions about local data.
+  DO NOT USE THIS SKILL when: the input references remote URLs (http/https/s3/gs)
+  — delegate to /duckdb-skills:query-cloud. DO NOT USE when the user asks to
+  attach a new DuckDB file — delegate to /duckdb-skills:attach-db. DO NOT USE
+  when the user asks to connect to PostgreSQL, SQLite, or MySQL — delegate to
+  /duckdb-skills:attach-external.
 argument-hint: <SQL or question> [--file path]
 allowed-tools:
   - Bash
   - run_in_terminal
 ---
 
-You are helping the user query data using DuckDB.
+Query local data using DuckDB. Operates in three tiers: Discovery (metadata),
+Profiling (preview), Execution (full query). Always use the lightest tier that
+answers the question.
 
-Input: `$@`
+Always append `&& echo "===DONE===" || echo "===FAILED==="` to each command.
 
-Follow these steps in order.
+## Step 1 — Routing and delegation
 
-## Step 1 — Resolve state and determine the mode
+Check the user's input for external data references:
+- If the input references URLs (`http://`, `https://`, `s3://`, `gs://`),
+  immediately delegate to `/duckdb-skills:query-cloud` and exit.
+- If the user asks to attach a `.duckdb` or `.db` file, delegate to
+  `/duckdb-skills:attach-db` and exit.
+- If the user asks to connect to PostgreSQL, SQLite, or MySQL, delegate to
+  `/duckdb-skills:attach-external` and exit.
 
-Look for an existing state file in either location:
+Otherwise, proceed with local execution.
+
+## Step 2 — Level 1: Discovery (state & schema)
+
+### Resolve state and determine mode
 
 ```bash
 STATE_DIR=""
@@ -27,133 +47,120 @@ PROJECT_ID="$(echo "$PROJECT_ROOT" | tr '/' '-')"
 test -f "$HOME/.duckdb-skills/$PROJECT_ID/state.sql" && STATE_DIR="$HOME/.duckdb-skills/$PROJECT_ID"
 ```
 
-If found, verify the databases it references are still accessible:
+- **Session mode** if: `STATE_DIR` is set and the input references table names,
+  is natural language, or is SQL without file references.
+- **Ad-hoc mode** if: `--file` flag present, SQL references file paths, or
+  no state file found.
+
+If the state file exists but any ATTACH fails, warn the user and fall back
+to ad-hoc mode.
+
+### Check DuckDB is installed
 
 ```bash
-duckdb -init "$STATE_DIR/state.sql" -c "SHOW DATABASES;"
+command -v duckdb && echo "===DONE===" || echo "===FAILED==="
 ```
 
-Now determine the mode:
+If not found, delegate to `/duckdb-skills:install-duckdb`.
 
-- **Ad-hoc mode** if: the `--file` flag is present, or the SQL references file paths/literals (e.g. `FROM 'data.csv'`), or `STATE_DIR` is empty.
-- **Session mode** if: `STATE_DIR` is set and the input references table names, is natural language, or is SQL without file references.
+### Retrieve schema (lightweight — no data scanned)
 
-If no state file exists and no file is referenced, fall back to ad-hoc mode against `:memory:` — the user must reference files directly in their SQL.
-
-If the state file exists but any ATTACH in it fails, warn the user and fall back to ad-hoc mode.
-
-## Step 2 — Check DuckDB is installed
+**Session mode** — single-pass schema retrieval:
 
 ```bash
-command -v duckdb
+duckdb -init "$STATE_DIR/state.sql" -markdown -c "
+SELECT table_name, column_name, data_type
+FROM duckdb_columns()
+ORDER BY table_name, column_index;
+" && echo "===DONE===" || echo "===FAILED==="
 ```
 
-If not found, delegate to `/duckdb-skills:install-duckdb` and then continue.
-
-## Step 3 — Generate SQL if needed
-
-If the input is natural language (not valid SQL), generate SQL using the Friendly SQL reference below.
-
-In **session mode**, first retrieve the schema to inform query generation:
+**Ad-hoc mode** — check file size instantly with OS tools. Do NOT run
+`SELECT count()` on raw files just to estimate size:
 
 ```bash
-duckdb -init "$STATE_DIR/state.sql" -csv -c "
-SELECT table_name FROM duckdb_tables() ORDER BY table_name;
-"
+du -m "FILE_PATH" 2>/dev/null && echo "===DONE===" || echo "===FAILED==="
 ```
 
-Then for relevant tables:
+If a file is > 500 MB, enforce a `LIMIT` on all exploratory queries and warn
+the user about potential query time.
+
+## Step 3 — Level 2: Profiling (optional preview)
+
+If the input is natural language (not valid SQL) and you are unsure of the
+data's contents, run a lightweight profiling query before writing the final SQL:
 
 ```bash
-duckdb -init "$STATE_DIR/state.sql" -csv -c "DESCRIBE <table_name>;"
+duckdb -init "$STATE_DIR/state.sql" -markdown -c "
+SUMMARIZE SELECT * FROM <table_or_file>;
+" && echo "===DONE===" || echo "===FAILED==="
 ```
 
-Use the schema context and the Friendly SQL reference to generate the most appropriate query.
+This provides min, max, unique counts, and null percentages — use these
+statistics to write an accurate analytical query on the first try.
 
-## Step 4 — Estimate result size
+Skip this step if:
+- The user provided exact SQL to run
+- You already know the schema from Step 2
+- The query is intrinsically bounded (`DESCRIBE`, `count()`, aggregations)
 
-Before executing, estimate whether the query could produce a very large result that would
-consume excessive tokens when returned to this conversation.
+Use the schema context and the Friendly SQL reference below to generate the
+most appropriate query.
 
-**Session mode** — check row counts for the tables involved:
+## Step 4 — Level 3: Execution
 
-```bash
-duckdb -init "$STATE_DIR/state.sql" -csv -c "
-SELECT table_name, estimated_size, column_count
-FROM duckdb_tables()
-WHERE table_name IN ('<table1>', '<table2>');
-"
-```
+Always use `-markdown` for LLM-readable output and set memory limits.
 
-**Ad-hoc mode** — probe the source:
+**Ad-hoc mode** (sandboxed — only referenced files accessible):
 
 ```bash
-duckdb :memory: -csv -c "
-SET allowed_paths=['FILE_PATH'];
+duckdb :memory: -markdown <<'SQL' && echo "===DONE===" || echo "===FAILED==="
+SET max_memory='4GB';
 SET enable_external_access=false;
 SET allow_persistent_secrets=false;
-SET lock_configuration=true;
-SELECT count() AS row_count FROM 'FILE_PATH';
-"
-```
-
-**Evaluate**:
-- If the query already has a `LIMIT`, `count()`, or other aggregation that bounds the output -> safe, proceed.
-- If the source has **>1M rows** and the query has no LIMIT or aggregation -> tell the user:
-  *"This query would return a very large result set. Displaying it here would consume a lot of tokens and increase cost. I'd recommend adding `LIMIT 1000` or an aggregation to keep the output manageable."*
-  Ask for confirmation before running as-is.
-- If the data size is **>10 GB** -> additionally warn:
-  *"This table is over 10 GB — the query may take a while to complete."*
-  Proceed if the user confirms.
-
-Skip this step for queries that are intrinsically bounded (e.g. `DESCRIBE`, `SUMMARIZE`, aggregations, `count()`).
-
-## Step 5 — Execute the query
-
-**Ad-hoc mode** (sandboxed — only the referenced file is accessible):
-
-```bash
-duckdb :memory: -csv <<'SQL'
-SET allowed_paths=['FILE_PATH'];
-SET enable_external_access=false;
-SET allow_persistent_secrets=false;
+SET allowed_paths=['FILE_DIR_OR_PATH'];
 SET lock_configuration=true;
 <QUERY>;
 SQL
 ```
 
-Replace `FILE_PATH` with the actual file path extracted from the query or `--file` argument.
-If multiple files are referenced, include all paths in the `allowed_paths` list.
+Replace `FILE_DIR_OR_PATH` with the actual path. For glob queries (`*.csv`),
+use the parent directory path. If multiple files, include all paths in the list.
 
 **Session mode** (user-trusted database):
 
 ```bash
-duckdb -init "$STATE_DIR/state.sql" -csv -c "<QUERY>"
-```
-
-For multi-line queries, use a heredoc with `-init`:
-
-```bash
-duckdb -init "$STATE_DIR/state.sql" -csv <<'SQL'
+duckdb -init "$STATE_DIR/state.sql" -markdown <<'SQL' && echo "===DONE===" || echo "===FAILED==="
+SET max_memory='4GB';
 <QUERY>;
 SQL
 ```
 
-Always use heredocs (`<<'SQL'`) for multi-line queries to avoid shell quoting issues.
+Always use heredocs (`<<'SQL'`) for multi-line queries.
 
-## Step 6 — Handle errors
+## Step 5 — Handle errors
 
 - **Syntax error**: show the error, suggest a corrected query, and re-run.
-- **Missing extension** (e.g. `Extension "X" not loaded`): delegate to `/duckdb-skills:install-duckdb <ext>`, then retry.
-- **Table not found** (session mode): list available tables with `FROM duckdb_tables()` and suggest corrections.
-- **File not found** (ad-hoc mode): use `find "$PWD" -name "<filename>" 2>/dev/null` to locate the file and suggest the corrected path.
-- **Persistent or unclear DuckDB error**: use `/duckdb-skills:duckdb-docs <error message or relevant keywords>` to search the documentation for guidance, then apply the fix and retry.
+- **Missing extension**: delegate to `/duckdb-skills:install-duckdb <ext>`, then retry.
+- **Table not found** (session): list tables with `FROM duckdb_tables()` and suggest corrections.
+- **File not found** (ad-hoc): use `find "$PWD" -name "<filename>" 2>/dev/null` to locate it.
+- **Persistent or unclear DuckDB error**: use `/duckdb-skills:duckdb-docs <error keywords>` to search docs, apply fix, retry.
 
-## Step 7 — Present results
+## Step 6 — Present results & data export
 
-Show the query output to the user. If the result has more than 100 rows, note the truncation and suggest adding `LIMIT` to the query.
+Show the markdown table output. For natural language questions, provide a brief
+interpretation.
 
-For natural language questions, also provide a brief interpretation of the results.
+If the result exceeds 100 rows, note the truncation and suggest `LIMIT`.
+
+**Data export**: If the user wants to save or convert data, write results to
+disk:
+
+```sql
+COPY (<QUERY>) TO 'output.parquet' (FORMAT PARQUET);
+```
+
+Supported formats: `PARQUET`, `CSV`, `JSON`, `NDJSON`.
 
 ---
 
@@ -185,10 +192,11 @@ When generating SQL, prefer these idiomatic DuckDB constructs:
 - **PIVOT / UNPIVOT**: reshape between wide and long formats
 - **SET VARIABLE x = expr**: define SQL-level variables, reference with `getvariable('x')`
 
-### Data import
+### Data import & export
 - **Direct file queries**: `FROM 'file.csv'`, `FROM 'data.parquet'`
 - **Globbing**: `FROM 'data/part-*.parquet'` reads multiple files
 - **Auto-detection**: CSV headers and schemas are inferred automatically
+- **COPY export**: `COPY (SELECT ...) TO 'output.parquet' (FORMAT PARQUET)` — also CSV, JSON, NDJSON
 
 ### Expressions and types
 - **Dot operator chaining**: `'hello'.upper()` or `col.trim().lower()`

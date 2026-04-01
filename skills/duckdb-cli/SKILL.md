@@ -2,8 +2,11 @@
 name: duckdb-cli
 description: >
   Best practices for using DuckDB's CLI in non-interactive (scripted) mode.
-  Covers output formats, POSIX pipe integration, performance tuning, heredocs,
-  and reliable success/failure signaling for programmatic use.
+  USE THIS SKILL when: writing bash scripts, building POSIX pipelines, chaining
+  shell commands with DuckDB, or optimizing DuckDB performance/memory settings
+  for the CLI.
+  DO NOT USE THIS SKILL when: writing standard SQL queries (use the query skill
+  instead) or asking about DuckDB's internal architecture.
 argument-hint: <question about DuckDB CLI usage>
 allowed-tools:
   - Bash
@@ -25,27 +28,26 @@ tool-call terminals.
 
 ---
 
+## Guardrails & Common Pitfalls (What NOT to do)
+
+* **DO NOT use interactive dot commands** (like `.mode` or `.once`) in `-c` one-liners. Use command-line flags (like `-csv` or `-json`) instead.
+* **DO NOT use unquoted heredocs (`<<SQL`)** unless you explicitly want the shell to evaluate `$VARIABLES` inside your SQL. Always default to single-quoted `<<'SQL'`.
+* **DO NOT use `-json` for large datasets.** It wraps output in a single array and can break if truncated. Always use `-jsonlines` for large queries.
+* **DO NOT run multi-statement scripts without `-bail`.** Always use `-bail` in scripts so execution stops on the first error.
+* **DO NOT use `SELECT *` on remote files** (HTTP/S3). Minimize downloaded data with explicit column lists and filters.
+
+---
+
 ## Step 1 — Verify DuckDB is available
 
 ```bash
 command -v duckdb && echo "===DONE===" || echo "===FAILED==="
 ```
 
-If not found, check for a binary installed by `https://install.duckdb.org`.
-The installer places versioned binaries under `~/.duckdb/cli/{semver}/duckdb`
-and creates a `latest` symlink. The symlink may not point to the highest
-installed version for compatibility reasons — however for programmatic use,resolve the true latest by sorting the semver directories:
+If not found, use the included helper script to locate the latest installed version:
 
 ```bash
-DUCKDB_BIN=$(ls -d ~/.duckdb/cli/[0-9]*/ 2>/dev/null \
-    | sed 's|.*/\([0-9][^/]*\)/|\1|' \
-    | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
-if [[ -n "$DUCKDB_BIN" && -x "$HOME/.duckdb/cli/$DUCKDB_BIN/duckdb" ]]; then
-    export PATH="$HOME/.duckdb/cli/$DUCKDB_BIN:$PATH"
-    echo "Using DuckDB at ~/.duckdb/cli/$DUCKDB_BIN/duckdb"
-else
-    echo "DuckDB not found — delegate to /duckdb-skills:install-duckdb"
-fi
+source ./scripts/get_duckdb_path.sh
 ```
 
 If still not found, delegate to `/duckdb-skills:install-duckdb`.
@@ -382,51 +384,15 @@ SQL
 
 ---
 
-## Quick Reference: CLI Flags
+## Quick Reference & Shortcuts
 
-| Flag                  | Description                                    |
-|-----------------------|------------------------------------------------|
-| `-c COMMAND`          | Execute SQL and exit                           |
-| `-f FILENAME`         | Execute script file and exit                   |
-| `-init FILENAME`      | Run init script (replaces `~/.duckdbrc`)       |
-| `-csv`                | CSV output mode                                |
-| `-json`               | JSON array output mode                         |
-| `-jsonlines`          | Newline-delimited JSON output                  |
-| `-line`               | One key=value per line                         |
-| `-list`               | Pipe-delimited output                          |
-| `-tabs`               | Tab-separated output                           |
-| `-box`                | Unicode box-drawing table                      |
-| `-table`              | ASCII-art table                                |
-| `-markdown`           | Markdown table                                 |
-| `-noheader`           | Suppress column headers                        |
-| `-separator SEP`      | Custom column separator                        |
-| `-nullvalue TEXT`      | Custom NULL display text                       |
-| `-readonly`           | Open database in read-only mode                |
-| `-bail`               | Stop on first error                            |
-| `-batch`              | Force batch (non-interactive) I/O              |
-| `-echo`               | Print SQL before execution                     |
-| `-no-stdin`           | Exit after processing options                  |
-| `-unsigned`           | Allow unsigned extensions (dev only)           |
+For a list of exact CLI flags (like `-tabs`, `-box`, `-noheader`) or
+DuckDB-specific SQL shortcuts (like `GROUP BY ALL`, `FROM 'file.csv'`),
+read the reference file:
 
----
-
-## DuckDB Friendly SQL Shortcuts (for concise CLI usage)
-
-These reduce the amount of SQL you type in one-liners:
-
-| Shortcut                                   | Instead of                                    |
-|--------------------------------------------|-----------------------------------------------|
-| `FROM table`                               | `SELECT * FROM table`                         |
-| `FROM 'file.csv'`                          | `SELECT * FROM read_csv('file.csv')`          |
-| `FROM 'file.parquet'`                      | `SELECT * FROM read_parquet('file.parquet')`  |
-| `GROUP BY ALL`                             | Listing all non-aggregate columns             |
-| `ORDER BY ALL`                             | Listing all columns in ORDER BY               |
-| `SELECT * EXCLUDE (col)`                   | Listing all columns except `col`              |
-| `SELECT * REPLACE (expr AS col)`           | Overriding one column in a wildcard           |
-| `DESCRIBE table_name`                      | Column names and types                        |
-| `SUMMARIZE table_name`                     | Statistical profile of every column           |
-| `count()`                                  | `count(*)`                                    |
-| `LIMIT 10%`                               | Percentage-based limit                        |
+```bash
+cat reference/cli_cheatsheet.md
+```
 
 ---
 
