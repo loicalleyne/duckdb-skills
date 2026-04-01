@@ -116,13 +116,15 @@ For column/predicate reference, read `reference/schema_and_macros.md`.
 Run via DuckDB CLI. Use heredoc for multi-line queries:
 
 ```bash
-cd "<TARGET_DIR>" && duckdb :memory: <<'SQL'
+cd "<TARGET_DIR>" && duckdb :memory: -jsonlines <<'SQL' && echo "===DONE===" || echo "===FAILED==="
 <GENERATED_SQL>
 SQL
 ```
 
-Use `-csv` for machine-readable output when piping to further processing.
-Omit `-csv` for the default box format when readability matters.
+**Output format selection:**
+- `-jsonlines` (default for this skill): structured, truncation-safe, handles wide AST tables with embedded commas/newlines in `peek`. Best for agent-consumed intermediate results.
+- `-csv`: use when piping output to POSIX tools (`cut`, `awk`, `sort`).
+- No flag (duckbox): use only when presenting final results to the user for readability.
 
 ## Step 5 — Interpret and act
 
