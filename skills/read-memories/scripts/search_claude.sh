@@ -26,7 +26,7 @@ if [ "${MATERIALIZE:-}" = "1" ]; then
 fi
 
 export KEYWORD
-duckdb "$OUTPUT_TARGET" -c "
+duckdb -init /dev/null "$OUTPUT_TARGET" -c "
 ${WRAP_CREATE}
 SELECT
   regexp_extract(filename, 'projects/([^/]+)/', 1) AS project,
@@ -37,5 +37,7 @@ FROM read_ndjson('$SEARCH_PATH', auto_detect=true, ignore_errors=true, filename=
 WHERE message::VARCHAR ILIKE '%' || getenv('KEYWORD') || '%'
   AND message.role IS NOT NULL
 ORDER BY timestamp
-${LIMIT_CLAUSE};
-" && echo "===DONE===" || echo "===FAILED==="
+${LIMIT_CLAUSE};"
+EXIT_CODE=$?
+[ $EXIT_CODE -ne 0 ] && { echo "===FAILED===" >&2; exit $EXIT_CODE; }
+echo "===DONE==="

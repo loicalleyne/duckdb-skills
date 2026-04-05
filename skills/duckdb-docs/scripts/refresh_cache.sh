@@ -17,15 +17,18 @@ command -v duckdb || { echo "DuckDB not found — delegate to /duckdb-skills:ins
 
 if [ ! -f "$CACHE_FILE" ] || [ -n "$(find "$CACHE_FILE" -mmin +2880 2>/dev/null)" ]; then
     echo "Updating cache from $REMOTE_URL..."
-    duckdb :memory: -c "
+    duckdb -init /dev/null :memory: -c "
         INSTALL httpfs; LOAD httpfs;
         INSTALL fts; LOAD fts;
         ATTACH '$REMOTE_URL' AS remote (READ_ONLY);
         ATTACH '${CACHE_FILE}.tmp' AS tmp;
         COPY FROM DATABASE remote TO tmp;
-    " && mv "${CACHE_FILE}.tmp" "$CACHE_FILE" \
-      && echo "===CACHE_UPDATED===" \
-      || { echo "===FAILED==="; exit 1; }
+    "
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -ne 0 ]; then
+        echo "===FAILED===" >&2; exit $EXIT_CODE
+    fi
+    mv "${CACHE_FILE}.tmp" "$CACHE_FILE" && echo "===CACHE_UPDATED===" || { echo "===FAILED===" >&2; exit 1; }
 else
     echo "===CACHE_FRESH==="
 fi

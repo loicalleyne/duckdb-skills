@@ -7,11 +7,14 @@ set -euo pipefail
 : "${DB_TYPE:?ERROR: DB_TYPE not set.}"
 : "${ALIAS:?ERROR: ALIAS not set.}"
 
-duckdb :memory: -markdown -c "
+duckdb -init /dev/null :memory: -markdown -c "
 LOAD $EXTENSION;
 ATTACH '$CONN_STRING' AS $ALIAS (TYPE $DB_TYPE);
 SELECT table_name, column_name, data_type
 FROM duckdb_columns()
 WHERE database_name = '$ALIAS'
 ORDER BY table_name, column_index;
-" && echo "===DONE===" || echo "===FAILED==="
+"
+EXIT_CODE=$?
+[ $EXIT_CODE -ne 0 ] && { echo "===FAILED===" >&2; exit $EXIT_CODE; }
+echo "===DONE==="

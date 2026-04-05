@@ -21,7 +21,7 @@ export FILE_PATH
 
 if [ -n "${READER:-}" ]; then
     # Direct reader path — fastest, no unused CTE branches
-    duckdb :memory: -markdown <<SQL && echo "===DONE===" || echo "===FAILED==="
+    duckdb -init /dev/null :memory: -markdown <<SQL
 ${EXTRA_INSTALL:-}
 ${REMOTE_PREFIX:-}
 SET max_memory = '4GB';
@@ -29,9 +29,12 @@ DESCRIBE FROM ${READER}(getenv('FILE_PATH'));
 SELECT count() AS row_count FROM ${READER}(getenv('FILE_PATH'));
 FROM ${READER}(getenv('FILE_PATH')) LIMIT ${SAMPLE_LIMIT};
 SQL
+    EXIT_CODE=$?
+    [ $EXIT_CODE -ne 0 ] && { echo "===FAILED===" >&2; exit $EXIT_CODE; }
+    echo "===DONE==="
 else
     # Auto-dispatch via read_any macro
-    duckdb :memory: -markdown <<SQL && echo "===DONE===" || echo "===FAILED==="
+    duckdb -init /dev/null :memory: -markdown <<SQL
 ${EXTRA_INSTALL:-}
 ${REMOTE_PREFIX:-}
 SET max_memory = '4GB';
@@ -40,4 +43,7 @@ DESCRIBE FROM read_any(getenv('FILE_PATH'));
 SELECT count() AS row_count FROM read_any(getenv('FILE_PATH'));
 FROM read_any(getenv('FILE_PATH')) LIMIT ${SAMPLE_LIMIT};
 SQL
+    EXIT_CODE=$?
+    [ $EXIT_CODE -ne 0 ] && { echo "===FAILED===" >&2; exit $EXIT_CODE; }
+    echo "===DONE==="
 fi

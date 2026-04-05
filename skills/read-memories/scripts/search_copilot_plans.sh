@@ -52,8 +52,8 @@ fi
 export KEYWORD
 
 # Primary: markdown extension with section-level search
-if duckdb -c "INSTALL markdown FROM community; LOAD markdown;" 2>/dev/null; then
-    if duckdb "$OUTPUT_TARGET" -line -c "
+if duckdb -init /dev/null :memory: -c "INSTALL markdown FROM community; LOAD markdown;" 2>/dev/null; then
+    if duckdb -init /dev/null "$OUTPUT_TARGET" -line -c "
 LOAD markdown;
 ${WRAP_CREATE}
 WITH sections AS (
@@ -80,7 +80,7 @@ ${LIMIT_CLAUSE};
 fi
 
 # Fallback: read_text() — no section granularity
-duckdb "$OUTPUT_TARGET" -line -c "
+duckdb -init /dev/null "$OUTPUT_TARGET" -line -c "
 ${WRAP_CREATE}
 WITH contents AS (
     ${TXT_SOURCES}
@@ -93,5 +93,7 @@ SELECT
 FROM contents
 WHERE content ILIKE '%' || getenv('KEYWORD') || '%'
 ORDER BY filename
-${LIMIT_CLAUSE};
-" && echo "===DONE===" || echo "===FAILED==="
+${LIMIT_CLAUSE};"
+EXIT_CODE=$?
+[ $EXIT_CODE -ne 0 ] && { echo "===FAILED===" >&2; exit $EXIT_CODE; }
+echo "===DONE==="

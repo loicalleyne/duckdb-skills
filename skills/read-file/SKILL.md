@@ -1,9 +1,11 @@
 ---
 name: read-file
 description: >
-  Read any data file (CSV, JSON, Parquet, Avro, Excel, spatial, SQLite) or
-  remote URL (S3, HTTPS). Use when user references a data file, asks "what's
-  in this file", or wants to preview/profile a dataset. Not for source code.
+  Read any data file (CSV, JSON, Parquet, Avro, Excel, spatial, SQLite,
+  Markdown) or remote URL (S3, HTTPS). Use when user references a data file,
+  asks "what's in this file", or wants to preview/profile a dataset. Use for
+  large .md Markdown files — parsed into structured sections via the DuckDB
+  markdown community extension. Not for source code.
   DO NOT USE THIS SKILL when: the user wants to run analytical SQL queries,
   aggregations, joins, or transformations on remote data — delegate to
   /duckdb-skills:query-cloud. DO NOT USE when the file is a .duckdb database
@@ -43,10 +45,18 @@ to auto-dispatch via `read_any` macro.
 | `.parquet .pq` | `read_parquet` | |
 | `.avro` | `read_avro` | |
 | `.xlsx .xls` | `read_xlsx` | |
+| `.md .markdown` | `read_markdown_sections` | `INSTALL markdown FROM community; LOAD markdown;` |
 | `.shp .gpkg .fgb .kml` | `st_read` | `INSTALL spatial; LOAD spatial;` |
 | `.db .sqlite .sqlite3` | `sqlite_scan` | `INSTALL sqlite_scanner; LOAD sqlite_scanner;` |
 | `.ipynb` | — use `scripts/read_notebook.sh` instead | |
 | unknown | leave `READER` unset | |
+
+> **Markdown note:** `read_markdown_sections()` parses the document into
+> hierarchical sections (columns: `file`, `section_path`, `heading`, `level`,
+> `content`). For glob patterns across multiple files use
+> `read_markdown('docs/**/*.md')`. For block-level parsing use
+> `read_markdown_blocks()`. Install once per session with
+> `INSTALL markdown FROM community; LOAD markdown;`.
 
 For remote URLs, set `REMOTE_PREFIX`:
 

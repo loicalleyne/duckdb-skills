@@ -50,7 +50,7 @@ SELECT
          THEN regexp_extract(parameters[1].name, '\*?(\w+)$', 1)
          ELSE NULL END as receiver,
     signature_type as returns,
-    list_filter(parameters, x -> x.type != 'receiver') as params,
+    list_filter(parameters, lambda x: x.type != 'receiver') as params,
     file_path, start_line
 FROM ast
 WHERE type IN ('function_declaration', 'method_declaration')

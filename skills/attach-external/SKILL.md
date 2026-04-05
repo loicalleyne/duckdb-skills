@@ -42,7 +42,7 @@ If unclear, ask the user.
 
 ```bash
 command -v duckdb || echo "===FAILED==="
-duckdb :memory: -c "INSTALL <extension>; LOAD <extension>;" && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null :memory: -c "INSTALL <extension>; LOAD <extension>;" && echo "===DONE===" || echo "===FAILED==="
 ```
 
 If missing, delegate to `/duckdb-skills:install-duckdb`.

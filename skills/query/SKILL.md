@@ -70,7 +70,7 @@ constructs (FROM-first, GROUP BY ALL, COLUMNS(*), etc.).
 
 **Ad-hoc (sandboxed):**
 ```bash
-duckdb :memory: -markdown <<'SQL' && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null :memory: -markdown <<'SQL' && echo "===DONE===" || echo "===FAILED==="
 SET max_memory='4GB';
 SET enable_external_access=false;
 SET allow_persistent_secrets=false;

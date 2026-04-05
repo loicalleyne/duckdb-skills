@@ -43,11 +43,11 @@ Still missing → delegate to `/duckdb-skills:install-duckdb`.
 
 ## Step 2 — Invocation patterns
 
-**One-liner:** `duckdb :memory: -csv -c "SELECT 42 AS answer" && echo "===DONE===" || echo "===FAILED==="`
+**One-liner:** `duckdb -init /dev/null :memory: -csv -c "SELECT 42 AS answer" && echo "===DONE===" || echo "===FAILED==="`
 
 **Heredoc:**
 ```bash
-duckdb :memory: -json <<'SQL' && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null :memory: -json <<'SQL' && echo "===DONE===" || echo "===FAILED==="
 SELECT table_name, estimated_size FROM duckdb_tables() ORDER BY estimated_size DESC LIMIT 10;
 SQL
 ```
@@ -69,7 +69,7 @@ Key tips:
 - `-jsonlines` safer than `-json` for large output (survives truncation).
 - `-line` ideal for single-row results or `DESCRIBE`.
 - `-csv -noheader` with `LIMIT 1` extracts a scalar cleanly:
-  `ROW_COUNT=$(duckdb mydb.duckdb -csv -noheader -c "SELECT count() FROM t;")`
+  `ROW_COUNT=$(duckdb -init /dev/null mydb.duckdb -csv -noheader -c "SELECT count() FROM t;")`
 - `-separator '|'` overrides column delimiter without changing mode.
 
 ## Step 4 — Pipe integration

@@ -9,7 +9,7 @@ set -euo pipefail
 export SEARCH_QUERY
 export VERSION_FILTER="${VERSION_FILTER:-stable}"
 
-duckdb "$CACHE_FILE" -readonly -json -c "
+duckdb -init /dev/null "$CACHE_FILE" -readonly -json -c "
 LOAD fts;
 SELECT
     chunk_id, page_title, section, breadcrumb, url, version, text,
@@ -19,4 +19,7 @@ WHERE score IS NOT NULL
   AND (getenv('VERSION_FILTER') = '' OR version = getenv('VERSION_FILTER'))
 ORDER BY score DESC
 LIMIT 5;
-" && echo "===DONE===" || echo "===FAILED==="
+"
+EXIT_CODE=$?
+[ $EXIT_CODE -ne 0 ] && { echo "===FAILED===" >&2; exit $EXIT_CODE; }
+echo "===DONE==="

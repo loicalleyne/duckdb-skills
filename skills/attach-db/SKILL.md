@@ -33,7 +33,7 @@ echo "Resolved: $RESOLVED_PATH" && echo "===DONE===" || echo "===FAILED==="
 Check DuckDB: `command -v duckdb || echo "===FAILED==="`.
 If missing, delegate to `/duckdb-skills:install-duckdb`.
 
-Validate: `duckdb "$RESOLVED_PATH" -c "PRAGMA version;" && echo "===DONE===" || echo "===FAILED==="`
+Validate: `duckdb -init /dev/null "$RESOLVED_PATH" -c "PRAGMA version;" && echo "===DONE===" || echo "===FAILED==="`
 Failure → report error and stop.
 
 ## Step 2 — Explore schema

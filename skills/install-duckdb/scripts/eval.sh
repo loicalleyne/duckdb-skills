@@ -42,7 +42,7 @@ eval_case() {
     # Verify each extension is loadable
     local ok=true
     for ext in "${exts[@]}"; do
-        if ! duckdb :memory: -c "LOAD ${ext};" &>/dev/null; then
+        if ! duckdb -init /dev/null :memory: -c "LOAD ${ext};" &>/dev/null; then
             ok=false
             echo "FAIL  (${elapsed}s) — LOAD ${ext} failed after install"
             echo "        skill output: ${result:0:300}"

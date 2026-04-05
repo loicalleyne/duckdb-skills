@@ -30,13 +30,19 @@ if [ ! -f "$DB" ]; then
     exit 1
 fi
 
-duckdb "$DB" -c "SELECT count() AS total_rows FROM memories;" && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null "$DB" -c "SELECT count() AS total_rows FROM memories;"
+EXIT_CODE=$?
+[ $EXIT_CODE -ne 0 ] && { echo "===FAILED===" >&2; exit $EXIT_CODE; }
+echo "===DONE==="
 
 if [ -n "${DRILL_TERM:-}" ]; then
     export DRILL_TERM
-    duckdb "$DB" -line -c "
+    duckdb -init /dev/null "$DB" -line -c "
     FROM memories
     WHERE columns(*) ILIKE '%' || getenv('DRILL_TERM') || '%'
     LIMIT 20;
-    " && echo "===DONE===" || echo "===FAILED==="
+    "
+    EXIT_CODE=$?
+    [ $EXIT_CODE -ne 0 ] && { echo "===FAILED===" >&2; exit $EXIT_CODE; }
+    echo "===DONE==="
 fi

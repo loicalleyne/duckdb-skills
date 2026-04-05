@@ -16,8 +16,8 @@ SELECT
          ELSE 'func ' || name END
     || '(' ||
     array_to_string(list_transform(
-        list_filter(parameters, (x) -> x.type != 'receiver'),
-        (x) -> x.name || ' ' || COALESCE(x.type, '?')
+        list_filter(parameters, lambda x: x.type != 'receiver'),
+        lambda x: x.name || ' ' || COALESCE(x.type, '?')
     ), ', ') || ')' ||
     COALESCE(' ' || signature_type, '') as signature,
     start_line

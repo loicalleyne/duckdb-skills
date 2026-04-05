@@ -31,7 +31,7 @@ Always append `&& echo "===DONE===" || echo "===FAILED==="` to each command.
 | `hf://` | `httpfs` | None |
 
 ```bash
-duckdb :memory: -c "INSTALL httpfs; LOAD httpfs;" && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null :memory: -c "INSTALL httpfs; LOAD httpfs;" && echo "===DONE===" || echo "===FAILED==="
 ```
 
 For Azure: also `INSTALL azure; LOAD azure;`. If fails, delegate to
@@ -50,13 +50,13 @@ If env vars unset and 403/401, tell user which vars to export.
 ## Step 3 — Discovery (schema)
 
 ```bash
-duckdb :memory: -markdown -c "LOAD httpfs; DESCRIBE SELECT * FROM '<URL>';" && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null :memory: -markdown -c "LOAD httpfs; DESCRIBE SELECT * FROM '<URL>';" && echo "===DONE===" || echo "===FAILED==="
 ```
 
 ## Step 4 — Profiling (optional)
 
 ```bash
-duckdb :memory: -markdown -c "LOAD httpfs; SELECT * FROM '<URL>' LIMIT 10;" && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null :memory: -markdown -c "LOAD httpfs; SELECT * FROM '<URL>' LIMIT 10;" && echo "===DONE===" || echo "===FAILED==="
 ```
 
 ## Step 5 — Execution
@@ -72,7 +72,7 @@ For `cache_httpfs` settings and status queries, read `reference/cache_httpfs.md`
 Prefer `cache_httpfs` when available, fall back to `httpfs`:
 
 ```bash
-duckdb :memory: -markdown <<'SQL' && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null :memory: -markdown <<'SQL' && echo "===DONE===" || echo "===FAILED==="
 INSTALL cache_httpfs FROM community;
 LOAD cache_httpfs;
 SET threads = 16;
@@ -83,7 +83,7 @@ SQL
 
 If `cache_httpfs` fails (e.g., Windows):
 ```bash
-duckdb :memory: -markdown <<'SQL' && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null :memory: -markdown <<'SQL' && echo "===DONE===" || echo "===FAILED==="
 LOAD httpfs;
 SET threads = 16;
 SET max_memory = '4GB';
@@ -94,7 +94,7 @@ SQL
 ### Materialize locally
 For repeated access to large remote data:
 ```bash
-duckdb :memory: -c "LOAD httpfs; COPY (FROM '<URL>') TO 'local_copy.parquet' (FORMAT PARQUET);" && echo "===DONE===" || echo "===FAILED==="
+duckdb -init /dev/null :memory: -c "LOAD httpfs; COPY (FROM '<URL>') TO 'local_copy.parquet' (FORMAT PARQUET);" && echo "===DONE===" || echo "===FAILED==="
 ```
 Then delegate to `/duckdb-skills:query` for local queries.
 

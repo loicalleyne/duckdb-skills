@@ -49,7 +49,7 @@ DUCKDB=$(command -v duckdb)
 If not found, delegate to `/duckdb-skills:install-duckdb` first.
 
 ```bash
-duckdb :memory: -c "INSTALL sitting_duck FROM community; LOAD sitting_duck; SELECT 'ok';" 2>&1
+duckdb -init /dev/null :memory: -c "INSTALL sitting_duck FROM community; LOAD sitting_duck; SELECT 'ok';" 2>&1
 ```
 
 ## Step 2 — Determine scope & cache
@@ -62,17 +62,64 @@ From the user's request, determine:
 
 If `--path` is provided, `cd` to that directory before running queries.
 
-**Default caching strategy**: Always use in-memory cache for single-session analysis unless the
-user specifically asks to analyze multiple projects or persist results.
+### Caching strategy
 
-```sql
+**Default (single project):** Create `code_ast.duckdb` in the project root. This persists across
+sessions so re-parsing is only needed when source files change.
+
+```bash
+# Build or rebuild the cache for the current project
+cd "<PROJECT_ROOT>"
+duckdb -init /dev/null code_ast.duckdb -jsonlines <<'SQL'
 LOAD sitting_duck;
-CREATE TABLE ast AS
+CREATE OR REPLACE TABLE ast AS
 SELECT * FROM read_ast('<PATTERN>', ignore_errors := true, peek := 200);
--- Then query `ast` instead of `read_ast(...)` for all subsequent queries
+SQL
+EXIT_CODE=$?
+[ $EXIT_CODE -ne 0 ] && { echo "Cache build failed: $EXIT_CODE" >&2; exit $EXIT_CODE; }
+echo "===DONE==="
 ```
 
-For persistent or cross-project caching strategies, read `reference/schema_and_macros.md`.
+Then query it in subsequent steps:
+```bash
+duckdb -init /dev/null code_ast.duckdb -jsonlines -c "LOAD sitting_duck; <QUERY>;"
+```
+
+**Cross-project:** Store each project's cache under `~/.duckdb/code_ast/` using a slug derived
+from the project directory name. Use `ATTACH` to query multiple projects from a single session.
+
+Convention: `~/.duckdb/code_ast/<project-slug>.duckdb`
+
+```bash
+# Build cross-project cache for a project
+PROJECT_SLUG="$(basename "$PROJECT_ROOT")"
+CACHE_DIR="$HOME/.duckdb/code_ast"
+mkdir -p "$CACHE_DIR"
+duckdb -init /dev/null "$CACHE_DIR/$PROJECT_SLUG.duckdb" -jsonlines <<'SQL'
+LOAD sitting_duck;
+CREATE OR REPLACE TABLE ast AS
+SELECT * FROM read_ast('<PATTERN>', ignore_errors := true, peek := 200);
+SQL
+EXIT_CODE=$?
+[ $EXIT_CODE -ne 0 ] && { echo "Cache build failed: $EXIT_CODE" >&2; exit $EXIT_CODE; }
+echo "===DONE==="
+```
+
+Query across multiple projects using `ATTACH`:
+
+```bash
+duckdb -init /dev/null :memory: -jsonlines <<'SQL'
+LOAD sitting_duck;
+ATTACH '$HOME/.duckdb/code_ast/proj-a.duckdb' AS proj_a (READ_ONLY);
+ATTACH '$HOME/.duckdb/code_ast/proj-b.duckdb' AS proj_b (READ_ONLY);
+-- Union both ASTs
+SELECT 'proj_a' AS project, name, file_path FROM proj_a.ast WHERE is_function_definition(semantic_type)
+UNION ALL
+SELECT 'proj_b' AS project, name, file_path FROM proj_b.ast WHERE is_function_definition(semantic_type);
+SQL
+```
+
+For full caching patterns and the ATTACH template, read `reference/schema_and_macros.md`.
 
 ### Key features
 
@@ -116,15 +163,49 @@ For column/predicate reference, read `reference/schema_and_macros.md`.
 Run via DuckDB CLI. Use heredoc for multi-line queries:
 
 ```bash
-cd "<TARGET_DIR>" && duckdb :memory: -jsonlines <<'SQL' && echo "===DONE===" || echo "===FAILED==="
+cd "<TARGET_DIR>" && duckdb -init /dev/null :memory: -jsonlines <<'SQL' && echo "===DONE===" || echo "===FAILED==="
 <GENERATED_SQL>
 SQL
 ```
 
-**Output format selection:**
-- `-jsonlines` (default for this skill): structured, truncation-safe, handles wide AST tables with embedded commas/newlines in `peek`. Best for agent-consumed intermediate results.
-- `-csv`: use when piping output to POSIX tools (`cut`, `awk`, `sort`).
-- No flag (duckbox): use only when presenting final results to the user for readability.
+**Output format — ALWAYS specify a flag. NEVER rely on the default duckbox for queries:**
+- `-jsonlines` **(required default)**: use for ALL analytical and intermediate queries. Structured, truncation-safe, handles embedded commas/newlines in `peek` columns. This is the only safe format for agent-consumed output.
+- `-csv`: use only when piping output to POSIX tools (`cut`, `awk`, `sort`, `wc`).
+- No flag (duckbox): forbidden for analytical queries. Acceptable **only** for the final human-readable summary shown directly to the user, never for chained or stored results.
+- Setup/verification commands (`INSTALL`, `LOAD`, `SELECT 'ok'`) are exempt — they produce minimal text and don't need a format flag.
+
+**Exit code capture — always check for query failure:**
+
+DuckDB exits with a non-zero code on SQL errors or connection failures. Capture and branch on it:
+
+```bash
+# Inline — use $? immediately after the command
+duckdb mydb.duckdb -jsonlines -c "SELECT count() FROM my_table;"
+EXIT_CODE=$?
+if [ $EXIT_CODE -ne 0 ]; then
+  echo "Query failed with exit code $EXIT_CODE" >&2
+  exit $EXIT_CODE
+fi
+
+# Conditional form — cleaner for single commands
+if duckdb mydb.duckdb -c "SELECT count() FROM my_table;"; then
+  echo "Query succeeded"
+else
+  echo "Query failed with exit code $?" >&2
+fi
+
+# Heredoc — capture exit code after the block
+duckdb :memory: -jsonlines <<'SQL'
+SELECT 1 AS ok;
+SQL
+EXIT_CODE=$?
+[ $EXIT_CODE -ne 0 ] && { echo "Query failed: $EXIT_CODE" >&2; exit $EXIT_CODE; }
+```
+
+Rules:
+- Always capture `$?` **immediately** after the `duckdb` command — any intervening command resets it.
+- Redirect error messages to `>&2` so they don't pollute stdout output piped to other tools.
+- The `&& echo "===DONE===" || echo "===FAILED==="` pattern in heredocs is a compact alternative that prints a sentinel without storing the exit code.
 
 ## Step 5 — Interpret and act
 
@@ -189,5 +270,5 @@ analyzing snippets, or comparing patterns without writing to disk.
 - **Generated code**: `file_path NOT LIKE '%.pb.go' AND file_path NOT LIKE '%_gen.go'`.
 - **Tree traversal**: The AST tree is `type_spec → struct_type → field_declaration_list → field_declaration → type_child`. Always traverse via `parent_id + file_path` JOINs, not `node_id` ranges.
 - **Struct field types**: Access through the chain: `type_spec` → `struct_type` → `field_declaration_list` → `field_declaration` → child `qualified_type`/`pointer_type`/`type_identifier`/etc.
-- **Parameter types**: `parameters` is `STRUCT(name VARCHAR, type VARCHAR)[]`. Element `[1]` is the receiver for methods (`type='receiver'`). Use `list_filter(parameters, x -> x.type != 'receiver')` for non-receiver params.
+- **Parameter types**: `parameters` is `STRUCT(name VARCHAR, type VARCHAR)[]`. Element `[1]` is the receiver for methods (`type='receiver'`). Use `list_filter(parameters, lambda x: x.type != 'receiver')` for non-receiver params.
 - **Signature types**: `signature_type` gives return types (e.g. `error`, `*arrow.Schema`, `[]string`).

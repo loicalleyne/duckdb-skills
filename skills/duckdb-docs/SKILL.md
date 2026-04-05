@@ -52,7 +52,7 @@ For both docs and blog results, run twice or set `VERSION_FILTER=""`.
 
 ## Step 4 — Handle errors
 
-- **Extension not installed:** `duckdb :memory: -c "INSTALL httpfs; INSTALL fts;"` and retry.
+- **Extension not installed:** `duckdb -init /dev/null :memory: -c "INSTALL httpfs; INSTALL fts;"` and retry.
 - **ATTACH fails / network unreachable:** inform user, check connectivity.
 - **No results:** broaden query (drop least specific term), retry. If still
   nothing, suggest https://duckdb.org/docs or https://ducklake.select/docs.
